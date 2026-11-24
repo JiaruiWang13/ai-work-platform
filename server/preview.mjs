@@ -4,13 +4,13 @@ import worker from '../dist/server/index.js';
 
 const port=Number(process.env.PORT || 5091);
 const serviceOrigin=process.env.SERVICE_ORIGIN || 'http://127.0.0.1:'+port;
-const clientOrigin=process.env.PAGES_ORIGIN;
+const clientOrigins=new Set((process.env.PAGES_ORIGIN || '').split(',').map(origin=>origin.trim()).filter(Boolean));
 const server=http.createServer(async(request,response)=>{
   try {
     const isAPI=request.url.startsWith('/api/');
     const origin=request.headers.origin;
     const crossOrigin=isAPI && origin && origin!==serviceOrigin;
-    if(crossOrigin && origin!==clientOrigin){response.writeHead(403).end();return;}
+    if(crossOrigin && !clientOrigins.has(origin)){response.writeHead(403).end();return;}
     const cors=crossOrigin ? {'Access-Control-Allow-Origin':origin,'Vary':'Origin'} : {};
     if(isAPI && request.method==='OPTIONS'){
       response.writeHead(204,{...cors,'Access-Control-Allow-Methods':'GET, POST, OPTIONS',
@@ -18,7 +18,7 @@ const server=http.createServer(async(request,response)=>{
       return;
     }
     const headers=new Headers(request.headers);
-    if(crossOrigin)headers.delete('origin'); // Checked the one explicitly configured Pages origin above.
+    if(crossOrigin)headers.delete('origin'); // Checked the explicitly configured Pages origins above.
     const body=['GET','HEAD'].includes(request.method)?undefined:Readable.toWeb(request);
     const result=await worker.fetch(new Request(serviceOrigin+request.url,{
       method:request.method,headers,body,...(body?{duplex:'half'}:{}),
