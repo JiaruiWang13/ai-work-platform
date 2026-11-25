@@ -7,7 +7,7 @@ import { refreshWorkspaceMotion, animateEditor } from './workspace-motion.mjs?v=
 import { groups, seed } from './data.js';
 import { helpTopics } from './help.mjs';
 import { icon } from './icons.js';
-import { examples, exampleFiles, featuredCases, fileText } from './showcase.js?v=history-v1';
+import { examples, exampleFiles, featuredCases, fileText } from './showcase.js?v=office-v2';
 import { readEvents } from './events.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import { commandExamples } from './commands.mjs';
@@ -87,7 +87,7 @@ function load(reset = false) {
     }
     workspace.caseLibraryV2=true;
   }
-  if (!workspace.caseLibraryV3) {
+  if (!workspace.caseLibraryV4) {
     for (const example of featuredCases) {
       const template=makeExample(example);
       const chat=workspace.chats.find(item=>item.id===template.id);
@@ -102,7 +102,12 @@ function load(reset = false) {
       const current=exampleFiles.find(item=>item.id===file.id);
       if (current) Object.assign(file,structuredClone(current));
     }
-    workspace.caseLibraryV3=true;
+    for (const [caseId,fileId] of [['operations','case-weekly-deck'],['research','case-research-deck']]) {
+      if (workspace.chats.some(chat=>chat.id==='portfolio-'+caseId) && !workspace.files.some(file=>file.id===fileId)) {
+        workspace.files.push(structuredClone(exampleFiles.find(file=>file.id===fileId)));
+      }
+    }
+    workspace.caseLibraryV4=true;
     if (existing) try { localStorage.setItem(storageKey,JSON.stringify(workspace)); } catch {}
   }
   return workspace;
@@ -264,8 +269,6 @@ function dossierCover(example) {
   let face=`<span class="folio-blank">${icon(example.icon)}</span>`;
   if (example.id==='operations' && source) {
     face=`<span class="folio-sheet"><b>${escape(file.title)}</b>${source.rows.slice(0,3).map(row=>`<span><i>${escape(row[0])}</i><strong>${escape(row[2])}</strong></span>`).join('')}</span>`;
-  } else if (example.id==='launch' && byId('files','case-launch-deck')) {
-    face='<img class="folio-slide" src="assets/deliverables/launch-slide-1.webp" alt="">';
   } else if (file) {
     face=`<span class="folio-note"><b>${escape(file.title)}</b>${(source?.rows||[]).slice(0,3).map(row=>`<span><i>${escape(row[0])}</i><u></u></span>`).join('')}</span>`;
   }
@@ -365,7 +368,7 @@ function fileBadge(file) {
   const ext=fileFormat(file);
   return `<span class="file-format ${file.type==='表格'?'spreadsheet':''}" aria-hidden="true">${escape(ext.slice(0,4))}</span>`;
 }
-const exampleAssetSizes = {'weekly-report.docx':39526,'channel-breakdown.xlsx':7622,'channel-source.xlsx':6668,'launch-plan.docx':39372,'monthly-sales.xlsx':8112,'launch-brief.pptx':30008};
+const exampleAssetSizes = {'weekly-report.docx':40749,'weekly-brief.pptx':53045,'research-report.docx':40989,'research-brief.pptx':46287,'channel-breakdown.xlsx':9704,'channel-source.xlsx':6251,'launch-plan.docx':40965,'monthly-sales.xlsx':8114,'launch-brief.pptx':40168};
 function fileSize(file) {
   const asset = exampleFiles.find(item=>item.id===file.id)?.asset;
   const size = file.size ?? exampleAssetSizes[asset] ?? (file.content ? new TextEncoder().encode(file.content).byteLength : 0);
@@ -653,7 +656,7 @@ function chatView() {
             ${executionView(message)}
             ${answerBody(message)}
             ${files.length?`<div class="response-files"><small>${icon('file-text')}产物</small>${files.map(file=>fileButton(file,true)).join('')}</div>`:''}
-            ${message.mode==='demo' && index===messages.length-1 && examples.find(item=>item.id===chat.example)?.next?`<div class="row-actions trace-actions">${button('试着追问','case-follow',{id:chat.example,glyph:'messages-square'})}</div>`:''}
+            ${message.mode==='demo' && index===messages.length-1 && featuredCases.some(item=>item.id===chat.example)?`<div class="row-actions trace-actions">${button('试着追问','case-follow',{id:chat.example,glyph:'messages-square'})}${button('起草 PPT 指令','case-ppt',{id:chat.example,glyph:'file-text'})}</div>`:''}
             ${message.failed&&index===messages.length-1?button('重试这条消息','retry-chat',{id:chat.id,glyph:'refresh-cw',disabled:busy}):''}
             ${message.mode==='live'&&!message.failed?button('导出文件','export-reply',{id:String(index),glyph:'download',disabled:busy}):''}</div></div>`;
       }).join('') : ''}
@@ -868,8 +871,8 @@ function fileTile(file,actions=false) {
   const ext=fileFormat(file);
   let face='';
   let kind='document';
-  if (file.asset==='launch-brief.pptx') {
-    kind='slides';face='<img alt="" src="assets/deliverables/launch-slide-1.webp">';
+  if (fileFormat(file)==='PPTX' && file.sections?.length) {
+    kind='slides';face=`<span class="mini-page"><b>${escape(file.title)}</b><span>${file.sections.length} 页 · 可编辑演示文稿</span></span>`;
   } else if(file.type==='图片' && /^data:image\/(png|jpeg|webp);base64,/i.test(file.thumbnail||file.data)) {
     kind='image';face=`<img alt="" src="${escape(file.thumbnail||file.data)}">`;
   } else if (file.type==='表格' && table) {
@@ -1773,9 +1776,9 @@ function paintReplay() {
   const heading=file?.sections?.[0]?.title || '';
   const excerpt=file?.sections?.[0]?.text || '';
   const handoff={
-    operations:'负责人用 Word 周报看本周变化，运营用 Excel 明细定位到渠道和商品。要查清具体原因，可以切到下一步的退款核对清单。',
-    launch:'产品和运营用 Word 方案确认日期与负责人。启动会上用六页演示稿对齐试点范围、验收与回退，渠道和客服再用清单逐项确认。',
-    research:'评审时先读简报中的判断。遇到关于样本范围或报价口径的问题，打开下一步的证据台账，按材料编号回查出处。'
+    operations:'负责人读 Word 周报，运营用 Excel 复算指标，周会上用 PPT 对齐增长拆解与退款核查。不明原因写入后续核对清单。',
+    launch:'用 Word 方案确认范围、责任人和放量条件。启动会 PPT 用于评审，渠道和客服用清单逐项复核。',
+    research:'用 PPT 比较服务方案，用 Word 核对调研设计。需要追溯统计或样本时，打开下一步的证据台账。'
   };
   const context=[example.prompt,handoff[example.id],example.follow.prompt][step];
   const scene=dialog.querySelector('.replay-scene');
@@ -1816,11 +1819,14 @@ async function preview(file, chosenSheet = 0) {
   if (!file || !await fetchScheduledFile(file)) return;
   const footer=`<footer class="dialog-footer file-preview-actions">${previewParent?button(previewParent.label,'close',{glyph:'arrow-left'}):''}${button('下载文件','download',{id:file.id,glyph:'download'})}${file.sections||file.content||needsExtraction(file)?button('引用到对话','ask-file',{id:file.id,primary:true,glyph:'messages-square'}):''}</footer>`;
   dialog.dataset.file=file.id;
-  if (file.sections) {
-    if (file.asset==='launch-brief.pptx') {
+  if (file.sections?.length) {
+    if (fileFormat(file)==='PPTX') {
       const section=file.sections[chosenSheet]||file.sections[0];
       const tabs=file.sections.map(({title},i)=>button(String(i+1),'preview-sheet',{id:file.id,extra:`data-sheet="${i}" aria-label="第 ${i+1} 页 ${escape(title)}" aria-pressed="${i===chosenSheet}"`})).join('');
-      modal(file.name,`<img class="slide-preview" src="assets/deliverables/launch-slide-${chosenSheet+1}.webp" alt="${escape(section.title+'。'+section.text)}"><div class="slide-controls"><span>第 ${chosenSheet+1} / ${file.sections.length} 页</span><div class="segments sheet-tabs" role="group" aria-label="幻灯片页码">${tabs}</div></div><details class="slide-transcript" ${matchMedia('(max-width:600px)').matches?'open':''}><summary>本页文字</summary><h3>${escape(section.title)}</h3><p>${escape(section.text)}</p></details>`+footer,true);
+      const table=section.table;
+      const grid=table?dataTable(table.columns,table.rows.map(row=>row.map((value,i)=>
+        table.formats?.[i]==='percent' && typeof value==='number'?(value*100).toFixed(2)+'%':value))):'';
+      modal(file.name,`<div class="slide-controls"><span>第 ${chosenSheet+1} / ${file.sections.length} 页</span><div class="segments sheet-tabs" role="group" aria-label="幻灯片页码">${tabs}</div></div><article class="editable-slide${chosenSheet===0?' slide-cover':''}"><h3>${escape(section.title)}</h3><p>${escape(section.text)}</p>${grid}</article>`+footer,true);
       return;
     }
     const book=file.type==='表格' && file.sections.length>1;
@@ -1848,7 +1854,7 @@ async function download(file) {
     try {storedBlob=await getOfficeFile(file.id);} catch {}
     if(!storedBlob){toast('此浏览器缺少文件内容，请在原对话重新生成。');return;}
   }
-  const url = storedBlob ? URL.createObjectURL(storedBlob) : storedAsset ? 'assets/deliverables/'+storedAsset : (typeof file.data==='string'&&/^data:[^,;]*;base64,[a-z0-9+/=]+$/i.test(file.data)?file.data:'') || URL.createObjectURL(new Blob([file.content],{type:file.mime}));
+  const url = storedBlob ? URL.createObjectURL(storedBlob) : storedAsset ? 'assets/deliverables/'+storedAsset+'?v=office-v2' : (typeof file.data==='string'&&/^data:[^,;]*;base64,[a-z0-9+/=]+$/i.test(file.data)?file.data:'') || URL.createObjectURL(new Blob([file.content],{type:file.mime}));
   const anchor = Object.assign(document.createElement('a'),{href:url,download:file.name});
   anchor.click();
   if (url.startsWith('blob:')) setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -2057,9 +2063,12 @@ document.addEventListener('click',async event=>{
       break;
     case 'file-case': caseFilter=id;fileType='all';fileQuery='';render({bottom:false});break;
     case 'library-layout': libraryLayout=id;render({bottom:false});break;
-    case 'case-follow': {
+    case 'case-follow':
+    case 'case-ppt': {
       const input=document.querySelector('#message');
-      if (!input.value.trim()) input.value=examples.find(item=>item.id===id).next;
+      if (!input.value.trim()) input.value=action==='case-ppt'
+        ? '根据上面的案例和附件，生成一份 8 页可编辑的 PPTX，供业务评审。包含结论、指标对比、证据边界、责任人与下一步。保留数字和单位，标明演示数据、公开来源和拟定目标。用可编辑图表或表格呈现关键对比。'
+        : examples.find(item=>item.id===id).next;
       input.focus();
       break;
     }
@@ -2268,7 +2277,10 @@ document.addEventListener('click',async event=>{
       spaceOpen=false;showComposer(route);
       break;
     }
-    case 'preview-sheet': preview(byId('files',id),Number(control.dataset.sheet));dialog.querySelector('.sheet-tabs [aria-pressed=true]')?.focus({preventScroll:true});break;
+    case 'preview-sheet':
+      await preview(byId('files',id),Number(control.dataset.sheet));
+      dialog.querySelector('.sheet-tabs [aria-pressed=true]')?.focus({preventScroll:true});
+      break;
     case 'export-reply':
       modal('导出这条回复','<div class="row-actions">'+['Word','PowerPoint','Excel'].map((name,i)=>button(name,'export-office',{id,extra:'data-format="'+['docx','pptx','xlsx'][i]+'"'})).join('')+button('Markdown','save-reply',{id})+'</div>');
       break;
