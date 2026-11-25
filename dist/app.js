@@ -3,11 +3,11 @@ import {teamSync} from './team-sync.mjs';
 import {apiUrl} from './api.mjs';
 import {databases,workspaceAPI,workspaceToken} from './workspace-client.mjs';
 import { putOfficeFiles, getOfficeFile, removeOfficeFile, readOfficeUpload } from './office-files.mjs';
-import { refreshWorkspaceMotion, animateEditor } from './workspace-motion.mjs';
+import { refreshWorkspaceMotion, animateEditor } from './workspace-motion.mjs?v=history-v1';
 import { groups, seed } from './data.js';
 import { helpTopics } from './help.mjs';
 import { icon } from './icons.js';
-import { examples, exampleFiles, featuredCases, fileText } from './showcase.js';
+import { examples, exampleFiles, featuredCases, fileText } from './showcase.js?v=history-v1';
 import { readEvents } from './events.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import { commandExamples } from './commands.mjs';
@@ -86,6 +86,23 @@ function load(reset = false) {
       ];
     }
     workspace.caseLibraryV2=true;
+  }
+  if (!workspace.caseLibraryV3) {
+    for (const example of featuredCases) {
+      const template=makeExample(example);
+      const chat=workspace.chats.find(item=>item.id===template.id);
+      if (chat?.messages[1]?.mode!=='demo') continue;
+      const secondRoundIsDemo=chat.messages[2]?.role==='user' && chat.messages[3]?.mode==='demo';
+      const end=secondRoundIsDemo ? 4 : 2;
+      const revised=template.messages.slice(0,end).map((message,index) => ({...message,at:chat.messages[index].at}));
+      chat.messages.splice(0,end,...revised);
+      if (['经营数据周报','新品发布方案','行业资料核对'].includes(chat.title)) chat.title=example.label;
+    }
+    for (const file of workspace.files) {
+      const current=exampleFiles.find(item=>item.id===file.id);
+      if (current) Object.assign(file,structuredClone(current));
+    }
+    workspace.caseLibraryV3=true;
     if (existing) try { localStorage.setItem(storageKey,JSON.stringify(workspace)); } catch {}
   }
   return workspace;
@@ -94,7 +111,7 @@ function makeExample(example) {
   const messages=[];
   const rounds=[example,...(example.follow?[example.follow]:[])];
   for (const [index,round] of rounds.entries()) {
-    const time='2026-11-17T06:0'+index+':';
+    const time='2026-11-24T06:0'+index+':';
     messages.push({role:'user',text:round.prompt,at:time+'00Z',attachments:round.input?[round.input]:[]},
       {...structuredClone(round.reply),role:'assistant',mode:'demo',at:time+'01Z',steps:round.steps});
   }
@@ -557,15 +574,18 @@ function themeControl(compact=false) {
 function conversationHistory() {
   const archived=state.chats.filter(item=>item.archived);
   const visible=state.chats.filter(item=>Boolean(item.archived)===archivedChats).toSorted((a,b)=>new Date(b.updated)-new Date(a.updated));
+  const examplesInHistory=archivedChats?[]:featuredCases.map(example=>visible.find(chat=>chat.id==='portfolio-'+example.id)).filter(Boolean);
+  const recent=visible.filter(chat=>!examplesInHistory.includes(chat));
+  const group=(label,items,examples=false)=>items.length?`<section class="history-group"><h3 class="history-label"><span>${label}</span><small>${items.length}</small></h3>
+    ${items.map(item=>`<div class="history-row${item.id===activeChat?' active':''}" data-search="${escape(label+' '+item.title)}">
+      <button type="button" data-action="open-chat" data-id="${escape(item.id)}" aria-pressed="${item.id===activeChat}"><span><strong>${escape(item.title)}</strong><small>${examples?'案例回放':beijingTime(item.updated,true,true)}</small></span></button>
+      <div class="history-actions">${button('','archive-chat',{glyph:archivedChats?'refresh-cw':'archive',id:item.id,title:archivedChats?'恢复会话':'归档会话'})}
+      ${button('','delete',{glyph:'trash',id:item.id,title:'删除会话',extra:'data-collection="chats"'})}</div></div>`).join('')}</section>`:'';
   return `<aside class="chat-history" id="chat-history"><header class="drawer-head"><h2>会话历史 <small>${state.chats.length}</small></h2><div>
     ${button('','new-chat',{title:'新对话',glyph:'plus'})}${button('','history',{title:'关闭会话历史',glyph:'arrow-left'})}</div></header>
     <label class="history-filter search-field">${icon('search')}<input id="chat-search" aria-label="搜索会话" type="search" placeholder="搜索会话" data-filter="#chat-list"></label>
-    <div class="history-label"><span>${archivedChats?'已归档':'最近会话'}</span><small>${visible.length}</small></div>
-    <div id="chat-list">${visible.map(item=>`<div class="history-row${item.id===activeChat?' active':''}" data-search="${escape(item.title)}">
-      <button type="button" data-action="open-chat" data-id="${item.id}" aria-pressed="${item.id===activeChat}"><span><strong>${escape(item.title)}</strong><small>${beijingTime(item.updated,true,true)}</small></span></button>
-      <div class="history-actions">${button('','archive-chat',{glyph:archivedChats?'refresh-cw':'archive',id:item.id,title:archivedChats?'恢复会话':'归档会话'})}
-      ${button('','delete',{glyph:'trash',id:item.id,title:'删除会话',extra:'data-collection="chats"'})}</div></div>`).join('')||empty(archivedChats?'暂无归档会话':'暂无会话')}
-      ${visible.length?'<p class="history-end" role="status">没有更多了</p>':''}</div>
+    <div id="chat-list">${group('业务示例',examplesInHistory,true)}${group(archivedChats?'已归档':'最近会话',recent)}
+      ${visible.length?'<p class="history-end" role="status">没有更多了</p>':empty(archivedChats?'暂无归档会话':'暂无会话')}</div>
     <footer>${button('已归档 '+archived.length,'toggle-archived',{glyph:'archive',extra:`aria-pressed="${archivedChats}"`})}
       <a class="button" href="#files">文件管理 ${icon('chevron-right')}</a></footer></aside>`;
 }
@@ -1233,7 +1253,11 @@ function filterRows(input){
   }
   if(target.id==='chat-list'){
     const count=target.querySelectorAll('.history-row:not([hidden])').length;
-    target.closest('.chat-history').querySelector('.history-label small').textContent=count;
+    for (const group of target.querySelectorAll('.history-group')) {
+      const matches=group.querySelectorAll('.history-row:not([hidden])').length;
+      group.hidden=!matches;
+      group.querySelector('.history-label small').textContent=matches;
+    }
     const end=target.querySelector('.history-end');
     if(end)end.textContent=term?(count?'找到 '+count+' 个会话':'没有匹配的会话'):'没有更多了';
   }
@@ -1287,6 +1311,25 @@ function workspaceScroll(current){
   return pagePositions.get(entry)||0;
 }
 
+function paintWorkspace(markup, preserveInputs) {
+  const template=document.createElement('template');
+  template.innerHTML=markup;
+  const next=template.content.firstElementChild;
+  const current=app.firstElementChild;
+  if (!current?.classList.contains('shell') || current.children.length!==next.children.length) {
+    app.replaceChildren(next);
+    return;
+  }
+  if (current.className!==next.className) current.className=next.className;
+  [...next.children].forEach((incoming,index)=>{
+    const mounted=current.children[index];
+    if (mounted.id==='workspace' && incoming.id==='workspace') {
+      if (mounted.inert!==incoming.inert) mounted.inert=incoming.inert;
+      if (!preserveInputs || !mounted.isEqualNode(incoming)) mounted.replaceChildren(...incoming.childNodes);
+    } else if (!mounted.isEqualNode(incoming)) mounted.replaceWith(incoming);
+  });
+}
+
 function render({keepDraft = true, bottom = true,preserveInputs=true} = {}) {
   const draft = keepDraft ? document.querySelector('#message, #home-input') : null;
   const draftFocused = draft === document.activeElement;
@@ -1310,9 +1353,11 @@ function render({keepDraft = true, bottom = true,preserveInputs=true} = {}) {
   const restoreInputs=sameRoute&&preserveInputs?restoreInputsAfterPaint():()=>{};
   if (!sameRoute && page==='chat') showConversationStart=Boolean(byId('chats',activeChat)?.example);
   if (!sameRoute && dialog.open) dialog.close();
-  document.documentElement.dataset.theme = state.profile.theme;
-  document.title = pageNames[page] + ' · ' + brandName();
-  document.querySelector('link[rel=icon]').href=brandImage('icon');
+  if (document.documentElement.dataset.theme!==state.profile.theme) document.documentElement.dataset.theme=state.profile.theme;
+  const title=pageNames[page]+' · '+brandName();
+  if (document.title!==title) document.title=title;
+  const favicon=document.querySelector('link[rel=icon]'), iconUrl=brandImage('icon');
+  if (favicon.getAttribute('href')!==iconUrl) favicon.setAttribute('href',iconUrl);
   if(page==='login'||page==='register'){
     const pending=sameRoute?app.querySelector('.auth-real-form:has([type=submit]:disabled)'):null;
     app.innerHTML=authPreview(page==='register');
@@ -1322,13 +1367,13 @@ function render({keepDraft = true, bottom = true,preserveInputs=true} = {}) {
     positionMenus();startWelcomeCommand();return;
   }
   const view = views[page] || (() => collection(page));
-  app.innerHTML = `<div class="shell${navCollapsed?' nav-collapsed':''}">${nav()}${mobileMenu ? '<button class="mobile-scrim" aria-label="关闭导航" data-action="menu"></button>' : ''}
+  paintWorkspace(`<div class="shell${navCollapsed?' nav-collapsed':''}">${nav()}${mobileMenu ? '<button class="mobile-scrim" aria-label="关闭导航" data-action="menu"></button>' : ''}
     <header class="topbar"${mobileMenu?' inert':''}><div class="topbar-left">${button('','menu',{glyph:'menu',title:'切换导航',extra:`aria-expanded="${mobileMenu}" aria-controls="navigation"`})}
       ${navCollapsed?button('','fold-nav',{glyph:'panel-left',title:'展开主导航'}):''}
       <a href="#home" class="mobile-logo ${page==='chat'?'mobile-wordmark':'mobile-mark'}" aria-label="${escape(brandName())} 工作台"><img src="${escape(brandImage(page==='chat'?'logo':'icon'))}" alt=""></a><strong>${pageNames[page]}</strong></div>
     <div class="topbar-right">${account?button(account.person.display,'account-options'):link('登录','login')}${page==='chat'?'<span class="current-theme">'+(state.profile.theme==='dark'?'深色主题':'浅色主题')+'</span>':themeControl(true)}
       ${page==='chat'?button(commandLanguage==='zh'?'中文':'EN','command-language',{extra:'aria-label="切换指令示例语言"'}):'<span class="workspace-language">中文</span>'}</div></header>
-    <main id="workspace" tabindex="-1" class="workspace"${mobileMenu?' inert':''}>${view()}</main></div>`;
+    <main id="workspace" tabindex="-1" class="workspace"${mobileMenu?' inert':''}>${view()}</main></div>`,keepDraft&&preserveInputs);
   positionMenus();
   restoreInputs();
   document.querySelector('.navigation').scrollTop = navScroll;
@@ -1729,7 +1774,7 @@ function paintReplay() {
   const excerpt=file?.sections?.[0]?.text || '';
   const handoff={
     operations:'负责人用 Word 周报看本周变化，运营用 Excel 明细定位到渠道和商品。要查清具体原因，可以切到下一步的退款核对清单。',
-    launch:'产品和运营用 Word 方案确认日期与负责人。启动会上用四页演示稿说明安排，渠道和客服再用验收表逐项确认。',
+    launch:'产品和运营用 Word 方案确认日期与负责人。启动会上用六页演示稿对齐试点范围、验收与回退，渠道和客服再用清单逐项确认。',
     research:'评审时先读简报中的判断。遇到关于样本范围或报价口径的问题，打开下一步的证据台账，按材料编号回查出处。'
   };
   const context=[example.prompt,handoff[example.id],example.follow.prompt][step];

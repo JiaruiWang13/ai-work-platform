@@ -37,7 +37,7 @@ export async function refreshWorkspaceMotion({route,homeTab,caseFilter,libraryLa
   context=gsap.context(()=>{
     const reveal=(selector,vars={})=>{
       const items=[...host.querySelectorAll(selector)].slice(0,10);
-      if (items.length) gsap.from(items,{y:7,opacity:.26,duration:.26,stagger:.024,ease:'power2.out',clearProps:'transform,opacity',...vars});
+      if (items.length) gsap.from(items,{y:4,duration:.26,stagger:.024,ease:'power2.out',clearProps:'transform',...vars});
     };
     if(area==='cases') reveal('.dossier-card',{y:0,duration:.18});
     if(area==='library') reveal('.library-row,.file-tile',{duration:.18,stagger:.014});
@@ -59,7 +59,7 @@ export async function animateEditor(dialog) {
   if(!gsap || !dialog.open || !form?.isConnected || preference.matches) return;
   const media=gsap.matchMedia();
   media.add('(prefers-reduced-motion: no-preference)',()=>{
-    gsap.from(form,{y:6,opacity:.5,duration:.2,ease:'power2.out',clearProps:'transform,opacity'});
+    gsap.from(form,{y:4,duration:.2,ease:'power2.out',clearProps:'transform'});
   });
   dialog.addEventListener('close',()=>media.revert(),{once:true});
 }

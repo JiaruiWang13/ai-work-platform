@@ -1041,3 +1041,7 @@ dialog[data-file] .dialog-header {position:sticky;top:0;z-index:2;background:var
 .slide-transcript {margin:10px 0 4px;color:var(--secondary);font-size:15px;line-height:1.65}
 .slide-transcript summary {cursor:pointer;color:var(--link);width:max-content;font-weight:600}
 .slide-transcript h3 {margin:8px 0 2px;font-size:16px;color:var(--ink)}
+
+/* Built-in conversations stay reachable ahead of ongoing work. */
+#chat-list .history-label { margin: 8px 0 6px; }
+.history-group + .history-group { margin-top: 16px; }
