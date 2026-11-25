@@ -1025,8 +1025,13 @@ dialog.side::backdrop { backdrop-filter:none; }
 dialog[data-file] .dialog-header {position:sticky;top:0;z-index:2;background:var(--panel)}
 .file-preview-actions {position:sticky;bottom:-18px;background:var(--panel);border-top:1px solid var(--line);margin-inline:-18px;margin-bottom:-18px;padding:11px 18px;flex-wrap:wrap}
 .file-preview-actions [data-action=close] {margin-right:auto}
-.slide-preview {display:block;width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
-.slide-controls {justify-content:space-between;margin-top:12px;color:var(--secondary);font-size:14px}
+.slide-controls {display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:12px 0;color:var(--secondary);font-size:14px}
+.slide-controls .segments {flex-wrap:wrap}
+.editable-slide {padding:clamp(16px,4vw,46px);margin-bottom:14px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink)}
+.editable-slide.slide-cover {background:#122846;color:#fff;border-color:#122846}
+.editable-slide h3 {font-size:clamp(20px,3vw,30px);margin-bottom:12px}
+.editable-slide p,.file-preview-content p {white-space:pre-line;line-height:1.65;margin-bottom:10px}
+.editable-slide .data-table {margin-top:16px}
 .slide-controls .sheet-tabs {margin:0}
 @media (max-width:1100px) and (min-width:701px) {.case-card {padding:11px;gap:7px}.case-card strong {font-size:15px}}
 @media (max-width:700px) {
